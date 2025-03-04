@@ -39,7 +39,7 @@ def extract_qa(llm_response):
         return None
 
 def question_Generate(keyword, experience):
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.7)
+    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash")
 
     mcq_prompt = [("system", f"""You are an expert MCQ (Multiple Choice Question) generator for coding-related topics. Your task is to create five (5) high-quality MCQ questions based on the user's provided programming language and experience.
 
@@ -143,7 +143,7 @@ def question_Generate(keyword, experience):
     return mcq_data, code_data, sub_data
 
 def evaluate_answer(question, student_answer):
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.2)
+    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash")
 
     if not student_answer.strip():
         return {"score": 0, "feedback": "Answer was blank or empty.", "result": "fail"}

@@ -3,4 +3,4 @@ python-dotenv
 langchain-google-genai
 google-generativeai
 requests
-streamlit-webrtc==0.47.7
+streamlit-webrtc

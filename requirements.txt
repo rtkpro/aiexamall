@@ -1,6 +1,6 @@
-streamlit==1.33.0
+streamlit
 python-dotenv
 langchain-google-genai
 google-generativeai
 requests
-streamlit-webrtc
+

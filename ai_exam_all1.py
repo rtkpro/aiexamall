@@ -5,9 +5,6 @@ import google.generativeai as genai
 import streamlit as st
 import json
 import requests
-import cv2
-import threading
-import time
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
 load_dotenv()
@@ -202,18 +199,18 @@ def submit_test_results(mcq_score, subjective_evaluations, code_evaluations, ema
     subjective_score = sum(eval.get('score', 0) for eval in subjective_evaluations.values()) / len(subjective_evaluations) if subjective_evaluations else 0
     coding_score= sum(eval.get('score', 0) for eval in code_evaluations.values()) / len(code_evaluations) if code_evaluations else 0
 
-    data = {
-        "email": email,
-        "mcq_score": mcq_score,
-        "subjective_score": subjective_score,
-        "coding_score": coding_score,
-        "test_id": test_id
-    }
-    st.write(data)
+    # data = {
+    #     "email": email,
+    #     "mcq_score": mcq_score,
+    #     "subjective_score": subjective_score,
+    #     "coding_score": coding_score,
+    #     "test_id": test_id
+    # }
+    # st.write(data)
 
     try:
         response = requests.get(f"https://doskr.com/RESTAPI/udpatescore.php?email={email}&test_id={test_id}&mcq_score={mcq_score}&subjective_score={subjective_score}&coding_score={coding_score}")
-        st.write(response)
+        #st.write(response)
         response.raise_for_status()
         st.success("Test results submitted successfully!")
 

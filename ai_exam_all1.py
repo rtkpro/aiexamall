@@ -5,6 +5,7 @@ import google.generativeai as genai
 import streamlit as st
 import json
 import requests
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -166,15 +167,15 @@ def evaluate_answer(question, student_answer):
 
         **Example JSON Output Format:**
             1. {{
-                "score": 85,
-                "feedback": "...",
-                "result": "pass"
+                    "score": 85,
+                    "feedback": "...",
+                    "result": "pass"
             }}
 
             2. {{
-                "score": 0,
-                "feedback": "...",
-                "result": "fail"
+                    "score": 0,
+                    "feedback": "...",
+                    "result": "fail"
             }}
 
         Evaluate the student's answer and provide the JSON response."""
@@ -209,16 +210,21 @@ def submit_test_results(mcq_score, subjective_evaluations, code_evaluations, ema
 
     try:
         response = requests.get(f"https://doskr.com/RESTAPI/udpatescore.php?email={email}&test_id={test_id}&mcq_score={mcq_score}&subjective_score={subjective_score}&coding_score={coding_score}")
+        st.write(response)
         response.raise_for_status()
         st.success("Test results submitted successfully!")
 
     except requests.exceptions.RequestException as e:
         st.error(f"Error submitting test results: {e}")
 
+class VideoTransformer(VideoTransformerBase):
+    def transform(self, frame):
+        img = frame.to_ndarray(format="bgr24")
+        return img
+
 st.title("AI-Powered MCQ, Subjective, and Coding Test")
 keywords = "Python"
 experience = "2 years"
-#percentage = 0 #initialize percentage here.
 query_params = st.query_params
 if "keywords" in query_params:
     keywords = query_params["keywords"]
@@ -252,143 +258,142 @@ if 'code_evaluations' not in st.session_state:
     st.session_state.code_evaluations = {}
 if 'evaluation_done' not in st.session_state:
     st.session_state.evaluation_done = False
+if 'video_started' not in st.session_state:
+    st.session_state.video_started = True  # Start video by default
 
-if not st.session_state.exam_started:
-    if st.button("Start All Tests"):
-        st.session_state.exam_started = True
-        st.session_state.mcq_questions, st.session_state.code_questions, st.session_state.subjective_questions = question_Generate(keywords, experience)
-        if not st.session_state.mcq_questions or not st.session_state.subjective_questions or not st.session_state.code_questions:
-            st.error("Failed to generate questions. Please try again.")
-            st.session_state.exam_started = False
-            st.stop()
+col1, col2 = st.columns([3, 1])
 
-if st.session_state.exam_started:
-    st.subheader("MCQ Questions")
-    if st.session_state.mcq_questions:
-        for i, q in enumerate(st.session_state.mcq_questions):
-            if isinstance(q, dict):
-                st.subheader(q.get('question', 'Question not found'))
-                selected_index = None
-                if str(i) in st.session_state.mcq_answers and st.session_state.mcq_answers[str(i)] in q.get('options', []):
-                    selected_index = q['options'].index(st.session_state.mcq_answers[str(i)])
+with col2:
+    if st.session_state.video_started:
+        webrtc_streamer(key="exam_video", video_transformer_factory=VideoTransformer)
 
-                answer = st.radio(
-                    "Choose one option",
-                    q.get('options', []),
-                    index=selected_index,
-                    key=f"mcq_{q.get('question', f'question_{i}')}_{i}"
-                )
-                st.session_state.mcq_answers[str(i)] = answer
-            else:
-                st.write(f"Invalid question format at index {i}: {q}")
-
-    st.subheader("Subjective Questions")
-    if st.session_state.subjective_questions:
-        for i, question in enumerate(st.session_state.subjective_questions):
-            st.subheader(f"Question {i + 1}:")
-            st.write(question["question"])
-            student_answer = st.text_area(f"Your Answer (Question {i + 1})",
-                                            value=st.session_state.subjective_answers.get(str(i), ""),
-                                            key=f"subjective_answer_{i}")
-            st.session_state.subjective_answers[str(i)] = student_answer
-
-    st.subheader("Coding Questions")
-    if st.session_state.code_questions:
-        for i, question in enumerate(st.session_state.code_questions):
-            st.subheader(f"Coding Question {i + 1}:")
-            st.write(question["question"])
-            student_code = st.text_area(f"Your Code (Question {i + 1})",
-                                        value=st.session_state.code_answers.get(str(i), ""),
-                                        key=f"code_answer_{i}")
-            st.session_state.code_answers[str(i)] = student_code
-
-    if st.button("Submit All Tests"):
-        
-        if st.session_state.mcq_questions:
-            if None in st.session_state.mcq_answers.values():
-                st.warning("Please answer all MCQ questions before submitting.")
+with col1:
+    if not st.session_state.exam_started and not st.session_state.evaluation_done:
+        st.write(f"Current keyword: {keywords}, Experience level: {experience}")
+        if st.button("Start All Tests"):
+            st.session_state.exam_started = True
+            st.session_state.mcq_questions, st.session_state.code_questions, st.session_state.subjective_questions = question_Generate(keywords, experience)
+            if not st.session_state.mcq_questions or not st.session_state.subjective_questions or not st.session_state.code_questions:
+                st.error("Failed to generate questions. Please try again.")
+                st.session_state.exam_started = False
                 st.stop()
-            # else:
-            #     score = calculate_score(st.session_state.mcq_answers)
-            #     total_questions = len(st.session_state.mcq_questions)
-            #     percentage = (score / total_questions) * 100
-            #     st.write(f"Your MCQ score is: {score}/{total_questions} ({percentage:.2f}%)")
+    elif st.session_state.exam_started:
+        st.subheader("MCQ Questions")
+        if st.session_state.mcq_questions:
+            for i, q in enumerate(st.session_state.mcq_questions):
+                if isinstance(q, dict):
+                    st.subheader(q.get('question', 'Question not found'))
+                    selected_index = None
+                    if str(i) in st.session_state.mcq_answers and st.session_state.mcq_answers[str(i)] in q.get('options', []):
+                        selected_index = q['options'].index(st.session_state.mcq_answers[str(i)])
 
+                    answer = st.radio(
+                        "Choose one option",
+                        q.get('options', []),
+                        index=selected_index,
+                        key=f"mcq_{q.get('question', f'question_{i}')}_{i}"
+                    )
+                    st.session_state.mcq_answers[str(i)] = answer
+                else:
+                    st.write(f"Invalid question format at index {i}: {q}")
+
+        st.subheader("Subjective Questions")
         if st.session_state.subjective_questions:
             for i, question in enumerate(st.session_state.subjective_questions):
-                evaluation = evaluate_answer(question, st.session_state.subjective_answers.get(str(i), ""))
-                st.session_state.subjective_evaluations[str(i)] = evaluation
+                st.subheader(f"Question {i + 1}:")
+                st.write(question["question"])
+                student_answer = st.text_area(f"Your Answer (Question {i + 1})",
+                                            value=st.session_state.subjective_answers.get(str(i), ""),
+                                            key=f"subjective_answer_{i}")
+                st.session_state.subjective_answers[str(i)] = student_answer
 
+        st.subheader("Coding Questions")
         if st.session_state.code_questions:
             for i, question in enumerate(st.session_state.code_questions):
-                evaluation = evaluate_answer(question, st.session_state.code_answers.get(str(i), ""))
-                st.session_state.code_evaluations[str(i)] = evaluation
+                st.subheader(f"Coding Question {i + 1}:")
+                st.write(question["question"])
+                student_code = st.text_area(f"Your Code (Question {i + 1})",
+                                            value=st.session_state.code_answers.get(str(i), ""),
+                                            key=f"code_answer_{i}")
+                st.session_state.code_answers[str(i)] = student_code
 
-        st.session_state.exam_started = False
-        st.session_state.evaluation_done = True
-        st.rerun()
+        if st.button("Submit All Tests"):
+            if st.session_state.mcq_questions:
+                if None in st.session_state.mcq_answers.values():
+                    st.warning("Please answer all MCQ questions before submitting.")
+                    st.stop()
 
-if st.session_state.evaluation_done:
-    st.subheader("MCQ Evaluations:")
-    if st.session_state.mcq_questions:
-        def calculate_score(student_answers):
-            correct_answers = 0
-            for i, answer in enumerate(student_answers.values()):
-                if answer is not None and i < len(st.session_state.mcq_questions):
-                    if answer == st.session_state.mcq_questions[i]['answer']:
-                        correct_answers += 1
-            return correct_answers
-        for i, question in enumerate(st.session_state.mcq_questions):
-            st.subheader(f"MCQ Evaluation for Question {i + 1}:")
-            st.write(f"Question: {question['question']}")
-            st.write(f"Correct Answer: {question['answer']}")
-            st.write(f"Your Answer: {st.session_state.mcq_answers.get(str(i), 'Not Answered')}")
-            st.write("-" * 20)
-        score = calculate_score(st.session_state.mcq_answers)
-        total_questions = len(st.session_state.mcq_questions)
-        percentage = (score / total_questions) * 100
-        st.write(f"Your MCQ score is: {score}/{total_questions} ({percentage:.2f}%)")
-        st.write("-" * 20)
+            if st.session_state.subjective_questions:
+                for i, question in enumerate(st.session_state.subjective_questions):
+                    evaluation = evaluate_answer(question, st.session_state.subjective_answers.get(str(i), ""))
+                    st.session_state.subjective_evaluations[str(i)] = evaluation
 
-    st.subheader("Subjective Evaluations:")
-    if st.session_state.subjective_questions:
-        for i, question in enumerate(st.session_state.subjective_questions):
-            st.subheader(f"Subjective Evaluation for Question {i + 1}:")
-            st.write(f"Question: {question['question']}")
-            evaluation = st.session_state.subjective_evaluations.get(str(i))
-            if evaluation and 'score' in evaluation and 'feedback' in evaluation:
-                st.write(f"Score: {evaluation['score']}%")
-                st.write(f"Feedback: {evaluation['feedback']}")
-            else:
-                st.write("Evaluation not available or invalid format.")
-            st.write("-" * 20)
+            if st.session_state.code_questions:
+                for i, question in enumerate(st.session_state.code_questions):
+                    evaluation = evaluate_answer(question, st.session_state.code_answers.get(str(i), ""))
+                    st.session_state.code_evaluations[str(i)] = evaluation
 
-    st.subheader("Coding Evaluations:")
-    if st.session_state.code_questions:
-        for i, question in enumerate(st.session_state.code_questions):
-            st.subheader(f"Coding Evaluation for Question {i + 1}:")
-            st.write(f"Question: {question['question']}")
-            evaluation = st.session_state.code_evaluations.get(str(i))
-            if evaluation and 'score' in evaluation and 'feedback' in evaluation:
-                st.write(f"Score: {evaluation['score']}%")
-                st.write(f"Feedback: {evaluation['feedback']}")
-            else:
-                st.write("Evaluation not available or invalid format.")
+            st.session_state.exam_started = False
+            st.session_state.evaluation_done = True
+            st.session_state.video_started = False # Stop video stream
+            st.rerun()
+
+    elif st.session_state.evaluation_done:
+        st.subheader("MCQ Evaluations:")
+        if st.session_state.mcq_questions:
+            def calculate_score(student_answers):
+                correct_answers = 0
+                for i, answer in enumerate(student_answers.values()):
+                    if answer is not None and i < len(st.session_state.mcq_questions):
+                        if answer == st.session_state.mcq_questions[i]['answer']:
+                            correct_answers += 1
+                return correct_answers
+            for i, question in enumerate(st.session_state.mcq_questions):
+                st.subheader(f"MCQ Evaluation for Question {i + 1}:")
+                st.write(f"Question: {question['question']}")
+                st.write(f"Correct Answer: {question['answer']}")
+                st.write(f"Your Answer: {st.session_state.mcq_answers.get(str(i), 'Not Answered')}")
+                st.write("-" * 20)
+            score = calculate_score(st.session_state.mcq_answers)
+            total_questions = len(st.session_state.mcq_questions)
+            percentage = (score / total_questions) * 100
+            st.write(f"Your MCQ score is: {score}/{total_questions} ({percentage:.2f}%)")
             st.write("-" * 20)
 
-    #Extract email and test_id from query params if they exist
-    email = query_params.get("email", None)
-    test_id = query_params.get("test_id", None)
+        st.subheader("Subjective Evaluations:")
+        if st.session_state.subjective_questions:
+            for i, question in enumerate(st.session_state.subjective_questions):
+                st.subheader(f"Subjective Evaluation for Question {i + 1}:")
+                st.write(f"Question: {question['question']}")
+                evaluation = st.session_state.subjective_evaluations.get(str(i))
+                if evaluation and 'score' in evaluation and 'feedback' in evaluation:
+                    st.write(f"Score: {evaluation['score']}%")
+                    st.write(f"Feedback: {evaluation['feedback']}")
+                else:
+                    st.write("Evaluation not available or invalid format.")
+                st.write("-" * 20)
 
-    if email and test_id:
-        submit_test_results(percentage,
-                                    st.session_state.subjective_evaluations,
-                                    st.session_state.code_evaluations,
-                                    email,
-                                    test_id)
-    else:
-        st.warning("Email and Test ID must be provided in the URL to submit results.")
+        st.subheader("Coding Evaluations:")
+        if st.session_state.code_questions:
+            for i, question in enumerate(st.session_state.code_questions):
+                st.subheader(f"Coding Evaluation for Question {i + 1}:")
+                st.write(f"Question: {question['question']}")
+                evaluation = st.session_state.code_evaluations.get(str(i))
+                if evaluation and 'score' in evaluation and 'feedback' in evaluation:
+                    st.write(f"Score: {evaluation['score']}%")
+                    st.write(f"Feedback: {evaluation['feedback']}")
+                else:
+                    st.write("Evaluation not available or invalid format.")
+                st.write("-" * 20)
 
-if not st.session_state.exam_started and not st.session_state.evaluation_done:
-    st.write(f"Current keyword: {keywords}, Experience level: {experience}")
-    st.write("Click 'Start All Tests' to begin.")
+        email = query_params.get("email", None)
+        test_id = query_params.get("test_id", None)
+
+        if email and test_id:
+            submit_test_results(percentage,
+                                        st.session_state.subjective_evaluations,
+                                        st.session_state.code_evaluations,
+                                        email,
+                                        test_id)
+        else:
+            st.warning("Email and Test ID must be provided in the URL to submit results.")

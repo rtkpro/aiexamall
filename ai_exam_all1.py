@@ -5,6 +5,9 @@ import google.generativeai as genai
 import streamlit as st
 import json
 import requests
+import cv2
+import threading
+import time
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
 load_dotenv()
@@ -199,14 +202,14 @@ def submit_test_results(mcq_score, subjective_evaluations, code_evaluations, ema
     subjective_score = sum(eval.get('score', 0) for eval in subjective_evaluations.values()) / len(subjective_evaluations) if subjective_evaluations else 0
     coding_score= sum(eval.get('score', 0) for eval in code_evaluations.values()) / len(code_evaluations) if code_evaluations else 0
 
-    # data = {
-    #     "email": email,
-    #     "mcq_score": mcq_score,
-    #     "subjective_score": subjective_score,
-    #     "coding_score": coding_score,
-    #     "test_id": test_id
-    # }
-    # st.write(data)
+    data = {
+        "email": email,
+        "mcq_score": mcq_score,
+        "subjective_score": subjective_score,
+        "coding_score": coding_score,
+        "test_id": test_id
+    }
+    st.write(data)
 
     try:
         response = requests.get(f"https://doskr.com/RESTAPI/udpatescore.php?email={email}&test_id={test_id}&mcq_score={mcq_score}&subjective_score={subjective_score}&coding_score={coding_score}")
@@ -223,6 +226,7 @@ class VideoTransformer(VideoTransformerBase):
         return img
 
 st.title("AI-Powered MCQ, Subjective, and Coding Test")
+st.info("Turn on your camera for recording.")
 keywords = "Python"
 experience = "2 years"
 query_params = st.query_params
@@ -259,7 +263,7 @@ if 'code_evaluations' not in st.session_state:
 if 'evaluation_done' not in st.session_state:
     st.session_state.evaluation_done = False
 if 'video_started' not in st.session_state:
-    st.session_state.video_started = True  # Start video by default
+    st.session_state.video_started = False # Video starts on button click now.
 
 col1, col2 = st.columns([3, 1])
 
@@ -268,7 +272,12 @@ with col2:
         webrtc_streamer(key="exam_video", video_transformer_factory=VideoTransformer)
 
 with col1:
-    if not st.session_state.exam_started and not st.session_state.evaluation_done:
+    if not st.session_state.video_started:
+        if st.button("Start Video Stream"):
+            st.session_state.video_started = True
+            st.rerun()
+
+    if st.session_state.video_started and not st.session_state.exam_started and not st.session_state.evaluation_done:
         st.write(f"Current keyword: {keywords}, Experience level: {experience}")
         if st.button("Start All Tests"):
             st.session_state.exam_started = True
@@ -276,7 +285,7 @@ with col1:
             if not st.session_state.mcq_questions or not st.session_state.subjective_questions or not st.session_state.code_questions:
                 st.error("Failed to generate questions. Please try again.")
                 st.session_state.exam_started = False
-                st.stop()
+                st.rerun()
     elif st.session_state.exam_started:
         st.subheader("MCQ Questions")
         if st.session_state.mcq_questions:
